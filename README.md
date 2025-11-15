@@ -4,11 +4,29 @@ This is a starter bot for ChessHacks. It includes a basic bot and devtools. This
 
 ## Directory Structure
 
-`/devtools` is a Next.js app that provides a UI for testing your bot. It includes an analysis board that you can use to test your bot and play against your own bot. You do not need to edit, or look at, any of this code (unless you want to). This file should be gitignored. Find out why [here](#installing-devtools-if-you-did-not-run-npx-chesshacks-create).
+```
+chess-bot/
+├── src/                    # Bot source code (edit this!)
+├── devtools/               # Web interface (Next.js app)
+├── training/               # Training scripts (Modal + local)
+├── benchmarks/             # Benchmarking tools (Stockfish)
+├── docs/                   # All documentation
+├── models/                 # Trained models (.pth files)
+├── data/                   # Training data (.npz files)
+├── scripts/                # Utility scripts
+├── tests/                  # Test files
+└── serve.py                # Backend server
+```
 
-`/src` is the source code for your bot. You will need to edit this code to implement your own bot.
+**Key Directories:**
 
-`serve.py` is the backend that interacts with the Next.js and your bot (`/src/main.py`). It also handles hot reloading of your bot when you make changes to it. This file, after receiving moves from the frontend, will communicate the current board status to your bot as a PGN string, and will send your bot's move back to the frontend. You do not need to edit any of this code (unless you want to).
+- **`/src`** - Your bot's source code. Edit `main.py` to implement your bot logic.
+- **`/devtools`** - Next.js web interface for testing your bot locally.
+- **`/training`** - Training scripts (`modal_train.py` for GPU training, `train.py` for local).
+- **`/benchmarks`** - Benchmarking tools to measure your bot's strength against Stockfish.
+- **`/docs`** - Complete documentation (guides, quick starts, troubleshooting).
+
+`serve.py` is the backend that interacts with the Next.js app and your bot (`/src/main.py`). It handles hot reloading of your bot when you make changes. You do not need to edit this file (unless you want to).
 
 While developing, you do not need to run either of the Python files yourself. The Next.js app includes the `serve.py` file as a subprocess, and will run it for you when you run `npm run dev`.
 
@@ -91,4 +109,29 @@ By default, the Next.js app will automatically reload (dismount and remount the 
 
 Keep in mind that you fully own all of this code! This entire devtool system runs locally, so feel free to modify it however you want. This is just designed as scaffolding to help you get started.
 
-If you need further help, please first check out the [docs](https://docs.chesshacks.dev/). If you still need help, please join our [Discord](https://docs.chesshacks.dev/resources/discord) and ask for help.
+## Quick Links
+
+- **📚 Documentation**: See [`docs/README.md`](docs/README.md) for all guides
+- **🚀 Quick Start**: See [`docs/QUICK_REFERENCE.md`](docs/QUICK_REFERENCE.md)
+- **🎯 Training**: See [`docs/TRAINING_GUIDE.md`](docs/TRAINING_GUIDE.md)
+- **📊 Benchmarking**: See [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md)
+
+## Common Commands
+
+```bash
+# Train model on GPU (recommended)
+modal run training/modal_train.py
+
+# Benchmark bot strength
+python benchmarks/benchmark_stockfish.py --progressive
+
+# Run devtools
+cd devtools && npm run dev
+```
+
+## Getting Help
+
+If you need further help:
+1. Check the [documentation](docs/README.md) in `docs/`
+2. See [ChessHacks docs](https://docs.chesshacks.dev/)
+3. Join [ChessHacks Discord](https://docs.chesshacks.dev/resources/discord)

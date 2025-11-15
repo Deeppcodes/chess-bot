@@ -16,7 +16,7 @@ def _load_model():
     if _model is not None:
         return  # Already loaded
     
-    model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'chess_model.pth')
+    model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models', 'chess_model.pth')
     
     if not os.path.exists(model_path):
         print(f"Warning: Model file not found at {model_path}")

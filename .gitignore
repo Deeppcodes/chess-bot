@@ -6,16 +6,17 @@ venv
 devtools
 
 # Model files (optionally commit these if you want to share your trained models)
-chess_model.pth
+models/
 *.pth
 
 # Training data
-training_data.npz
+data/
 *.npz
 
 # Modal cache
 .modal_cache/
 
-# Benchmark results
-benchmarks/
+# Benchmark results and Stockfish binary
+benchmarks/results/
+benchmarks/stockfish/
 *.benchmark.json
