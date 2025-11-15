@@ -15,3 +15,7 @@ training_data.npz
 
 # Modal cache
 .modal_cache/
+
+# Benchmark results
+benchmarks/
+*.benchmark.json

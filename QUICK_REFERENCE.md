@@ -15,6 +15,18 @@ modal run modal_train.py
 modal volume get chess-models chess_model_best.pth ./chess_model.pth
 ```
 
+### Benchmarking (Measure Strength)
+```bash
+# Setup (one-time)
+bash download_stockfish.sh
+
+# Quick benchmark (10 games)
+python benchmark_stockfish.py --elo 1200 --games 10
+
+# Find bot's true strength
+python benchmark_stockfish.py --progressive
+```
+
 ### Local Development
 ```bash
 # Setup Python environment
