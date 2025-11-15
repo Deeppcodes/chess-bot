@@ -25,14 +25,25 @@ def _load_model():
     
     try:
         from .utils.model import ChessModel
+        from .utils.improved_model import ImprovedChessModel
         from .utils.move_mapper import MoveMapper
         from .utils.mcts import MCTS
         
         # Load checkpoint
         checkpoint = torch.load(model_path, map_location='cpu')
         
-        # Create model
-        _model = ChessModel(hidden_size=128, num_hidden_layers=2)
+        # Determine model type and create appropriate model
+        model_type = checkpoint.get('model_type', 'ChessModel')
+        hidden_size = checkpoint.get('hidden_size', 128)
+        
+        if model_type == 'ImprovedChessModel':
+            print(f"Loading ImprovedChessModel (CNN-based) with hidden_size={hidden_size}")
+            _model = ImprovedChessModel(hidden_size=hidden_size)
+        else:
+            print(f"Loading ChessModel (MLP-based)")
+            num_layers = checkpoint.get('num_hidden_layers', 2)
+            _model = ChessModel(hidden_size=hidden_size, num_hidden_layers=num_layers)
+        
         _model.load_state_dict(checkpoint['model_state_dict'])
         _model.eval()
         

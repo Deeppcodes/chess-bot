@@ -4,3 +4,14 @@ venv
 .env.local
 .env
 devtools
+
+# Model files (optionally commit these if you want to share your trained models)
+chess_model.pth
+*.pth
+
+# Training data
+training_data.npz
+*.npz
+
+# Modal cache
+.modal_cache/

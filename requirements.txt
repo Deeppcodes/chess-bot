@@ -17,3 +17,6 @@ torch==2.2.2
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.38.0
+
+# Optional: For training on Modal (serverless GPU)
+# modal>=0.60.0

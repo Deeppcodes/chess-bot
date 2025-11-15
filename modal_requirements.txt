@@ -1,0 +1,8 @@
+# Modal-specific requirements
+# These are installed in the Modal container, not locally
+
+modal>=0.60.0
+torch==2.1.0
+numpy>=1.24.0
+chess>=1.10.0
+
