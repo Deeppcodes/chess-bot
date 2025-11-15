@@ -31,9 +31,29 @@ def _load_model():
         # Load checkpoint
         checkpoint = torch.load(model_path, map_location='cpu')
         
-        # Create model
-        _model = ChessModel(hidden_size=128, num_hidden_layers=2)
-        _model.load_state_dict(checkpoint['model_state_dict'])
+        # Create new CNN/ResNet model (replaces old MLP architecture)
+        # Default: 6 residual blocks, 64 channels
+        # You can adjust these parameters if needed
+        _model = ChessModel(num_residual_blocks=6, channels=64, dropout=0.0)
+        
+        # Load state dict with strict=False to handle architecture mismatches
+        # This allows graceful loading of old MLP checkpoints (weights will be skipped)
+        state_dict = checkpoint.get('model_state_dict', checkpoint)
+        
+        # Detect if this is an old MLP checkpoint
+        is_old_model = not any('conv' in key or 'residual' in key for key in state_dict.keys())
+        
+        try:
+            _model.load_state_dict(state_dict, strict=False)
+            if is_old_model:
+                print("  ⚠ Old MLP checkpoint detected - weights not compatible, using new CNN architecture")
+                print("  Please retrain the model with the new architecture for best performance")
+            else:
+                print("  ✓ Model weights loaded successfully")
+        except Exception as load_error:
+            print(f"  Warning: Could not load weights: {load_error}")
+            print("  Model initialized with random weights - please retrain")
+        
         _model.eval()
         
         # Get move mapper
@@ -47,9 +67,12 @@ def _load_model():
         _mcts = MCTS(_model, _move_mapper, num_simulations=50, exploration_constant=1.5)
         
         print(f"✓ Loaded model from {model_path}")
+        print(f"  Model architecture: CNN/ResNet")
         print(f"  Model parameters: {sum(p.numel() for p in _model.parameters()):,}")
     except Exception as e:
         print(f"Error loading model: {e}")
+        import traceback
+        traceback.print_exc()
         print("Falling back to random moves.")
 
 

@@ -149,17 +149,19 @@ def main():
                        help='Learning rate (default: 0.001)')
     parser.add_argument('--val-split', type=float, default=0.2,
                        help='Validation split ratio (default: 0.2)')
-    parser.add_argument('--hidden-size', type=int, default=256,
-                       help='Hidden layer size (default: 256)')
-    parser.add_argument('--num-layers', type=int, default=3,
-                       help='Number of hidden layers (default: 3)')
+    parser.add_argument('--num-residual-blocks', type=int, default=6,
+                       help='Number of residual blocks (default: 6, range: 4-8 recommended)')
+    parser.add_argument('--channels', type=int, default=64,
+                       help='Number of channels in convolutional layers (default: 64)')
+    parser.add_argument('--dropout', type=float, default=0.0,
+                       help='Dropout probability for regularization (default: 0.0, disabled)')
     parser.add_argument('--output', type=str, default='chess_model.pth',
                        help='Output model file (default: chess_model.pth)')
     
     args = parser.parse_args()
     
     print("=" * 60)
-    print("Phase 3: Model Training")
+    print("Phase 3: Model Training (CNN/ResNet Architecture)")
     print("=" * 60)
     
     # Set device
@@ -190,10 +192,16 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
     
-    # Create model
-    model = ChessModel(hidden_size=args.hidden_size, num_hidden_layers=args.num_layers)
+    # Create model with CNN/ResNet architecture
+    model = ChessModel(
+        num_residual_blocks=args.num_residual_blocks,
+        channels=args.channels,
+        dropout=args.dropout
+    )
     model = model.to(device)
-    print(f"\nModel created with {sum(p.numel() for p in model.parameters())} parameters")
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"\nModel created with {num_params:,} parameters")
+    print(f"  Architecture: CNN/ResNet with {args.num_residual_blocks} residual blocks, {args.channels} channels")
     
     # Loss functions
     policy_criterion = nn.CrossEntropyLoss()
