@@ -224,6 +224,86 @@ def play_self_play_game(model, move_mapper, mcts_sims: int = 50, max_length: int
     return positions, policies, value_targets
 
 
+def convert_old_to_new_architecture(old_state_dict):
+    """
+    Convert old model architecture (conv_input, res_blocks) to new architecture
+    (initial_conv, residual_blocks).
+
+    Old architecture keys:
+    - conv_input.0.weight -> initial_conv.weight
+    - res_blocks.X.Y -> residual_blocks.X.convY/bnY
+    - conv_layers -> policy_conv/value_conv
+    - fc_shared -> (removed in new arch)
+    - policy_head -> policy_fc
+    - value_head -> value_fc1, value_fc2
+    """
+    new_state_dict = {}
+
+    for old_key, value in old_state_dict.items():
+        # Initial convolution layer
+        if old_key.startswith('conv_input.0.'):
+            new_key = old_key.replace('conv_input.0.', 'initial_conv.')
+            new_state_dict[new_key] = value
+        elif old_key.startswith('conv_input.1.'):
+            new_key = old_key.replace('conv_input.1.', 'initial_bn.')
+            new_state_dict[new_key] = value
+
+        # Residual blocks: res_blocks.X.0 -> residual_blocks.X.conv1
+        elif old_key.startswith('res_blocks.'):
+            parts = old_key.split('.')
+            block_num = parts[1]
+            layer_num = parts[2]
+            param = '.'.join(parts[3:]) if len(parts) > 3 else ''
+
+            if layer_num == '0':  # First conv
+                new_key = f'residual_blocks.{block_num}.conv1.{param}' if param else f'residual_blocks.{block_num}.conv1'
+            elif layer_num == '1':  # First BN
+                new_key = f'residual_blocks.{block_num}.bn1.{param}' if param else f'residual_blocks.{block_num}.bn1'
+            elif layer_num == '3':  # Second conv
+                new_key = f'residual_blocks.{block_num}.conv2.{param}' if param else f'residual_blocks.{block_num}.conv2'
+            elif layer_num == '4':  # Second BN
+                new_key = f'residual_blocks.{block_num}.bn2.{param}' if param else f'residual_blocks.{block_num}.bn2'
+            else:
+                continue  # Skip ReLU layers (not saved in state_dict)
+
+            new_state_dict[new_key] = value
+
+        # Policy head: conv_layers.0 -> policy_conv, conv_layers.1 -> policy_bn
+        elif old_key.startswith('conv_layers.0.'):
+            new_key = old_key.replace('conv_layers.0.', 'policy_conv.')
+            new_state_dict[new_key] = value
+        elif old_key.startswith('conv_layers.1.'):
+            new_key = old_key.replace('conv_layers.1.', 'policy_bn.')
+            new_state_dict[new_key] = value
+
+        # Value head: conv_layers.3 -> value_conv, conv_layers.4 -> value_bn
+        elif old_key.startswith('conv_layers.3.'):
+            new_key = old_key.replace('conv_layers.3.', 'value_conv.')
+            new_state_dict[new_key] = value
+        elif old_key.startswith('conv_layers.4.'):
+            new_key = old_key.replace('conv_layers.4.', 'value_bn.')
+            new_state_dict[new_key] = value
+
+        # Policy FC: policy_head.0 and policy_head.3 -> policy_fc
+        elif old_key.startswith('policy_head.3.'):
+            new_key = old_key.replace('policy_head.3.', 'policy_fc.')
+            new_state_dict[new_key] = value
+
+        # Value FC: value_head.0 -> value_fc1, value_head.3 -> value_fc2
+        elif old_key.startswith('value_head.0.'):
+            new_key = old_key.replace('value_head.0.', 'value_fc1.')
+            new_state_dict[new_key] = value
+        elif old_key.startswith('value_head.3.'):
+            new_key = old_key.replace('value_head.3.', 'value_fc2.')
+            new_state_dict[new_key] = value
+
+        # Skip fc_shared and policy_head.0 (removed in new architecture)
+        elif old_key.startswith('fc_shared.') or old_key.startswith('policy_head.0.'):
+            continue
+
+    return new_state_dict
+
+
 def generate_selfplay_dataset(
     num_games: int,
     mcts_sims: int,
@@ -278,6 +358,13 @@ def generate_selfplay_dataset(
         state_dict = checkpoint
         move_mapper = MoveMapper()
         print(f"  Format: Direct state_dict")
+
+    # Detect old architecture and convert if needed
+    first_key = list(state_dict.keys())[0]
+    if 'conv_input' in first_key or 'res_blocks' in first_key:
+        print(f"  ⚠️  Detected OLD architecture - converting to new format...")
+        state_dict = convert_old_to_new_architecture(state_dict)
+        print(f"  ✓ Architecture converted successfully")
 
     # Create model
     model = ChessModel(
@@ -392,26 +479,64 @@ def main():
                        help='MCTS simulations per move (default: 50)')
     parser.add_argument('--max-length', type=int, default=200,
                        help='Maximum game length in plies (default: 200)')
-    parser.add_argument('--output', type=str, default='datasets/selfplay_data.npz',
-                       help='Output file (default: datasets/selfplay_data.npz)')
-    parser.add_argument('--model', type=str, default='chess_model_improved.pth',
-                       help='Model checkpoint to use (default: chess_model_improved.pth)')
+    parser.add_argument('--output', type=str, default='datasets/selfplay/',
+                       help='Output directory or file (default: datasets/selfplay/)')
+    parser.add_argument('--model', type=str, default='chess_model_best.pth',
+                       help='Model checkpoint to use (default: chess_model_best.pth)')
+    parser.add_argument('--batch-id', type=int, default=None,
+                       help='Batch ID for naming (auto-increments if not specified)')
 
     args = parser.parse_args()
+
+    # Determine output path
+    import os
+    if args.output.endswith('/') or os.path.isdir(args.output):
+        # Output is a directory - create batch file
+        os.makedirs(args.output, exist_ok=True)
+
+        # Auto-increment batch ID if not specified
+        if args.batch_id is None:
+            existing_batches = [f for f in os.listdir(args.output) if f.startswith('game_batch_') and f.endswith('.npz')]
+            if existing_batches:
+                batch_nums = [int(f.split('_')[2].split('.')[0]) for f in existing_batches]
+                args.batch_id = max(batch_nums) + 1
+            else:
+                args.batch_id = 1
+
+        output_path = os.path.join(args.output, f'game_batch_{args.batch_id:04d}.npz')
+    else:
+        # Output is a file path
+        output_path = args.output
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    print(f"\n{'='*70}")
+    print(f"🎮 PHASE 2: SELF-PLAY DATA GENERATION")
+    print(f"{'='*70}")
+    print(f"Model: {args.model}")
+    print(f"Games: {args.games}")
+    print(f"MCTS Simulations: {args.mcts_sims}")
+    print(f"Output: {output_path}")
+    print(f"{'='*70}\n")
 
     # Use the callable function
     generate_selfplay_dataset(
         num_games=args.games,
         mcts_sims=args.mcts_sims,
         max_length=args.max_length,
-        output_path=args.output,
+        output_path=output_path,
         model_path=args.model,
         device=None  # Auto-detect
     )
 
+    print(f"\n{'='*70}")
+    print(f"✅ SELF-PLAY GENERATION COMPLETE")
+    print(f"{'='*70}")
     print(f"\nNext steps:")
-    print(f"  1. Merge with existing data: python -m src.data.merge_datasets --datasets {args.output} datasets/training_data_20k.npz --output datasets/training_data_merged.npz")
-    print(f"  2. Train on merged data: python -m src.training.train_selfplay --data datasets/training_data_merged.npz")
+    print(f"  1. Train on this data:")
+    print(f"     python -m src.training.train_selfplay --data-dir {os.path.dirname(output_path)} --model {args.model} --epochs 5")
+    print(f"\n  2. Or train on single file:")
+    print(f"     python -m src.training.train_selfplay --data {output_path} --model {args.model} --epochs 5")
+    print(f"{'='*70}\n")
 
 
 if __name__ == "__main__":

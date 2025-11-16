@@ -1,20 +1,40 @@
 """
-Test script to compare old MLP vs new CNN/ResNet model architectures.
-This helps demonstrate the improvements of the new architecture.
+Phase 2 Model Comparison Script
+Compare two chess models on:
+1. Policy accuracy
+2. Value MAE (Mean Absolute Error)
+3. Head-to-head gameplay
 """
 
+import argparse
 import torch
 import torch.nn as nn
+import numpy as np
 from chess import Board
 import sys
 import os
+import random
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from src.utils.model import ChessModel
 from src.utils.board_encoder import board_to_tensor_torch
 from src.utils.move_mapper import MoveMapper
+from src.utils.mcts import MCTS
+
+
+def load_model(model_path, device='cpu'):
+    """Load a chess model from checkpoint."""
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    model = ChessModel(
+        num_residual_blocks=checkpoint.get('num_residual_blocks', 6),
+        channels=checkpoint.get('channels', 64),
+        dropout=0.0  # No dropout for evaluation
+    ).to(device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
+    return model
 
 
 def count_parameters(model):
@@ -22,167 +42,220 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def test_model_inference(model, model_name, num_tests=10):
-    """Test model inference speed and output quality."""
-    print(f"\n{'='*60}")
-    print(f"Testing {model_name}")
-    print(f"{'='*60}")
-    
-    model.eval()
+def evaluate_policy_accuracy(model1, model2, num_positions=100):
+    """
+    Compare policy accuracy: how often do models agree on best move?
+    """
+    print(f"\n{'='*70}")
+    print("POLICY ACCURACY COMPARISON")
+    print(f"{'='*70}")
+
     move_mapper = MoveMapper()
-    
-    # Create test positions
-    test_boards = []
-    for i in range(num_tests):
+    agreements = 0
+
+    for i in range(num_positions):
+        # Create random position
         board = Board()
-        # Make some random moves to get different positions
-        for _ in range(i * 3):
-            legal_moves = list(board.generate_legal_moves())
+        for _ in range(random.randint(0, 20)):
+            legal_moves = list(board.legal_moves)
             if legal_moves and not board.is_game_over():
-                import random
                 board.push(random.choice(legal_moves))
-        test_boards.append(board)
-    
-    # Test inference
-    import time
-    total_time = 0
-    
-    with torch.no_grad():
-        for i, board in enumerate(test_boards):
-            board_tensor = board_to_tensor_torch(board)
-            legal_moves = list(board.generate_legal_moves())
-            
-            start = time.perf_counter()
-            policy_logits, value = model(board_tensor)
-            inference_time = time.perf_counter() - start
-            total_time += inference_time
-            
-            # Convert to move probabilities
-            move_probs = move_mapper.get_move_probabilities(
-                policy_logits[0].numpy(), legal_moves
-            )
-            
-            if i == 0:  # Show details for first position
-                print(f"\n  Position {i+1}:")
-                print(f"    Legal moves: {len(legal_moves)}")
-                print(f"    Value estimate: {value.item():.4f}")
-                print(f"    Top 3 move probabilities:")
-                sorted_moves = sorted(move_probs.items(), key=lambda x: x[1], reverse=True)[:3]
-                for move, prob in sorted_moves:
-                    print(f"      {move.uci()}: {prob:.4f}")
-    
-    avg_time = total_time / num_tests
-    print(f"\n  Average inference time: {avg_time*1000:.2f} ms")
-    print(f"  Total parameters: {count_parameters(model):,}")
-    
-    return avg_time
+
+        if board.is_game_over():
+            continue
+
+        # Get predictions from both models
+        board_tensor = board_to_tensor_torch(board)
+        legal_moves = list(board.legal_moves)
+
+        with torch.no_grad():
+            policy1, _ = model1(board_tensor)
+            policy2, _ = model2(board_tensor)
+
+        # Get best moves
+        probs1 = move_mapper.get_move_probabilities(policy1[0].cpu().numpy(), legal_moves)
+        probs2 = move_mapper.get_move_probabilities(policy2[0].cpu().numpy(), legal_moves)
+
+        best_move1 = max(probs1.items(), key=lambda x: x[1])[0]
+        best_move2 = max(probs2.items(), key=lambda x: x[1])[0]
+
+        if best_move1 == best_move2:
+            agreements += 1
+
+    accuracy = agreements / num_positions * 100
+    print(f"  Policy Agreement: {accuracy:.1f}% ({agreements}/{num_positions} positions)")
+    print(f"  → Higher agreement suggests similar playing style")
+    print(f"  → Lower agreement suggests model2 learned new strategies")
+
+    return accuracy
 
 
-def compare_architectures():
-    """Compare old MLP vs new CNN/ResNet architecture."""
-    print("="*60)
-    print("MODEL ARCHITECTURE COMPARISON")
-    print("="*60)
-    
-    # Test new CNN/ResNet model
-    print("\n1. NEW CNN/ResNet Model")
-    print("-" * 60)
-    cnn_model = ChessModel(num_residual_blocks=6, channels=64, dropout=0.0)
-    cnn_params = count_parameters(cnn_model)
-    cnn_time = test_model_inference(cnn_model, "CNN/ResNet (6 blocks, 64 channels)")
-    
-    # Show architecture details
-    print(f"\n  Architecture Details:")
-    print(f"    - Initial Conv: 12 → 64 channels (3×3)")
-    print(f"    - Residual Blocks: 6 blocks")
-    print(f"    - Policy Head: Conv(64→32) → FC(2048→256)")
-    print(f"    - Value Head: Conv(64→32) → FC(2048→64→1)")
-    print(f"    - Spatial Information: PRESERVED (8×8 throughout)")
-    
-    # Summary comparison
-    print(f"\n{'='*60}")
-    print("SUMMARY COMPARISON")
-    print(f"{'='*60}")
-    print(f"\nCNN/ResNet Advantages:")
-    print(f"  ✓ Preserves spatial relationships (pieces' positions matter)")
-    print(f"  ✓ Learns local patterns (piece interactions, threats)")
-    print(f"  ✓ Better feature extraction through residual blocks")
-    print(f"  ✓ More efficient parameter usage")
-    print(f"  ✓ Better suited for MCTS (stronger policy priors)")
-    print(f"\n  Parameters: {cnn_params:,}")
-    print(f"  Inference: {cnn_time*1000:.2f} ms per position")
-    print(f"\n  Expected MCTS improvement: 2-5x stronger play")
-    print(f"  (Better policy = better MCTS exploration)")
+def evaluate_value_mae(model1, model2, num_positions=100):
+    """
+    Compare value prediction accuracy (Mean Absolute Error).
+    """
+    print(f"\n{'='*70}")
+    print("VALUE PREDICTION COMPARISON")
+    print(f"{'='*70}")
+
+    value_diffs = []
+
+    for i in range(num_positions):
+        # Create random position
+        board = Board()
+        for _ in range(random.randint(0, 30)):
+            legal_moves = list(board.legal_moves)
+            if legal_moves and not board.is_game_over():
+                board.push(random.choice(legal_moves))
+
+        if board.is_game_over():
+            continue
+
+        # Get value predictions
+        board_tensor = board_to_tensor_torch(board)
+
+        with torch.no_grad():
+            _, value1 = model1(board_tensor)
+            _, value2 = model2(board_tensor)
+
+        diff = abs(value1.item() - value2.item())
+        value_diffs.append(diff)
+
+    mae = np.mean(value_diffs)
+    print(f"  Mean Absolute Error: {mae:.4f}")
+    print(f"  → Lower MAE suggests similar position evaluation")
+    print(f"  → Higher MAE suggests model2 evaluates positions differently")
+
+    return mae
 
 
-def test_training_compatibility():
-    """Test that the model works with training pipeline."""
-    print(f"\n{'='*60}")
-    print("TRAINING COMPATIBILITY TEST")
-    print(f"{'='*60}")
-    
-    model = ChessModel(num_residual_blocks=6, channels=64)
-    model.train()
-    
-    # Simulate training batch
-    batch_size = 4
-    boards = torch.randn(batch_size, 12, 8, 8)
-    policy_targets = torch.randint(0, 256, (batch_size,))
-    value_targets = torch.randn(batch_size, 1)
-    
-    # Forward pass
-    policy_logits, value_pred = model(boards)
-    
-    # Loss computation (same as train.py)
-    policy_criterion = nn.CrossEntropyLoss()
-    value_criterion = nn.MSELoss()
-    
-    policy_loss = policy_criterion(policy_logits, policy_targets)
-    value_loss = value_criterion(value_pred, value_targets)
-    total_loss = policy_loss + value_loss
-    
-    # Backward pass
-    total_loss.backward()
-    
-    print(f"  ✓ Forward pass works: policy {policy_logits.shape}, value {value_pred.shape}")
-    print(f"  ✓ Loss computation works: policy={policy_loss.item():.4f}, value={value_loss.item():.4f}")
-    print(f"  ✓ Backward pass works: gradients computed")
-    print(f"  ✓ Training pipeline compatible!")
+def play_game(model1, model2, mcts_sims=20):
+    """
+    Play one game between two models.
+    Returns: 1 if model1 wins, -1 if model2 wins, 0 if draw
+    """
+    board = Board()
+    move_mapper = MoveMapper()
+    mcts1 = MCTS(model1, move_mapper, num_simulations=mcts_sims)
+    mcts2 = MCTS(model2, move_mapper, num_simulations=mcts_sims)
+
+    max_moves = 100
+    moves = 0
+
+    while not board.is_game_over() and moves < max_moves:
+        # White's turn (model1)
+        if board.turn:
+            best_move, _ = mcts1.search(board)
+        # Black's turn (model2)
+        else:
+            best_move, _ = mcts2.search(board)
+
+        board.push(best_move)
+        moves += 1
+
+    # Determine result
+    if board.is_checkmate():
+        return 1 if not board.turn else -1  # Winner is opposite of current turn
+    else:
+        return 0  # Draw
+
+
+def evaluate_head_to_head(model1, model2, num_games=10, mcts_sims=20):
+    """
+    Play head-to-head games between models.
+    """
+    print(f"\n{'='*70}")
+    print(f"HEAD-TO-HEAD GAMEPLAY ({num_games} games)")
+    print(f"{'='*70}")
+    print(f"  MCTS simulations per move: {mcts_sims}")
+    print(f"  Model1 plays White, Model2 plays Black\n")
+
+    results = {'model1_wins': 0, 'model2_wins': 0, 'draws': 0}
+
+    for game_num in range(num_games):
+        print(f"  Game {game_num + 1}/{num_games}...", end=' ', flush=True)
+        result = play_game(model1, model2, mcts_sims)
+
+        if result == 1:
+            results['model1_wins'] += 1
+            print("Model1 wins")
+        elif result == -1:
+            results['model2_wins'] += 1
+            print("Model2 wins")
+        else:
+            results['draws'] += 1
+            print("Draw")
+
+    print(f"\n{'='*70}")
+    print("RESULTS:")
+    print(f"  Model1 Wins: {results['model1_wins']}")
+    print(f"  Model2 Wins: {results['model2_wins']}")
+    print(f"  Draws: {results['draws']}")
+
+    win_rate = results['model2_wins'] / num_games * 100
+    print(f"\n  Model2 Win Rate: {win_rate:.1f}%")
+
+    if win_rate > 55:
+        print(f"  ✅ Model2 is STRONGER - consider using it as new baseline!")
+    elif win_rate < 45:
+        print(f"  ⚠️  Model2 is WEAKER - keep training or use more data")
+    else:
+        print(f"  ➡️  Models are SIMILAR - may need more games to decide")
+
+    return results
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Compare two chess models')
+    parser.add_argument('--model1', type=str, required=True,
+                       help='Path to first model (baseline)')
+    parser.add_argument('--model2', type=str, required=True,
+                       help='Path to second model (new model)')
+    parser.add_argument('--games', type=int, default=10,
+                       help='Number of head-to-head games (default: 10)')
+    parser.add_argument('--mcts-sims', type=int, default=20,
+                       help='MCTS simulations per move (default: 20)')
+    parser.add_argument('--skip-policy', action='store_true',
+                       help='Skip policy accuracy test')
+    parser.add_argument('--skip-value', action='store_true',
+                       help='Skip value MAE test')
+    parser.add_argument('--skip-games', action='store_true',
+                       help='Skip head-to-head games')
+
+    args = parser.parse_args()
+
+    print("\n" + "="*70)
+    print("🎯 PHASE 2: MODEL COMPARISON")
+    print("="*70)
+    print(f"Model 1 (Baseline): {args.model1}")
+    print(f"Model 2 (New):      {args.model2}")
+    print("="*70)
+
+    # Load models
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"\nLoading models on {device}...")
+
+    model1 = load_model(args.model1, device)
+    model2 = load_model(args.model2, device)
+
+    print(f"  ✓ Model1: {count_parameters(model1):,} parameters")
+    print(f"  ✓ Model2: {count_parameters(model2):,} parameters")
+
+    # Run evaluations
+    if not args.skip_policy:
+        policy_acc = evaluate_policy_accuracy(model1, model2, num_positions=100)
+
+    if not args.skip_value:
+        value_mae = evaluate_value_mae(model1, model2, num_positions=100)
+
+    if not args.skip_games:
+        results = evaluate_head_to_head(model1, model2, args.games, args.mcts_sims)
+
+    print(f"\n{'='*70}")
+    print("✅ COMPARISON COMPLETE")
+    print(f"{'='*70}\n")
 
 
 if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("CHESS MODEL TESTING & COMPARISON")
-    print("="*60)
-    
-    # Test training compatibility
-    test_training_compatibility()
-    
-    # Compare architectures
-    compare_architectures()
-    
-    print(f"\n{'='*60}")
-    print("HOW TO TEST YOUR MODEL")
-    print(f"{'='*60}")
-    print("""
-1. TRAIN THE NEW MODEL:
-   python train.py --num-residual-blocks 6 --channels 64 --epochs 10
-
-2. TEST IN DEVTOOLS:
-   cd devtools && npm run dev
-   Then play against your bot in the browser
-
-3. COMPARE PERFORMANCE:
-   - Play games against both old and new models
-   - New model should make more strategic moves
-   - Better position evaluation (value head)
-   - More accurate move predictions (policy head)
-
-4. MCTS BENEFITS:
-   - Better policy priors → MCTS explores better moves
-   - More accurate value estimates → Better position evaluation
-   - Result: Stronger overall play with same simulation count
-    """)
-    
-    print("="*60)
+    main()
 

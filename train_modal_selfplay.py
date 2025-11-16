@@ -28,10 +28,10 @@ app = modal.App("selfplay-training")
     volumes={"/data": volume},
 )
 def train_selfplay(
-    data_file: str = "datasets/test_10g.npz",
-    model_input: str = "chess_model_improved.pth",
-    model_output: str = "chess_model_selfplay.pth",
-    epochs: int = 10,
+    data_file: str = "selfplay_phase2.npz",
+    model_input: str = "chess_model_best.pth",
+    model_output: str = "chess_model_sp_v1.pth",
+    epochs: int = 5,
     batch_size: int = 256,
     learning_rate: float = 0.001,
 ):
@@ -49,7 +49,7 @@ def train_selfplay(
     from src.utils.model import ChessModel
     
     print("="*70)
-    print("🚀 Self-Play Reinforcement Learning Training")
+    print("🚀 PHASE 2: SELF-PLAY TRAINING ON MODAL GPU")
     print("="*70)
     print(f"Data: /data/{data_file}")
     print(f"Input model: /root/{model_input}")
@@ -225,10 +225,10 @@ def download_model(filename: str):
 
 @app.local_entrypoint()
 def main(
-    data_file: str = "datasets/test_10g.npz",
-    model_input: str = "chess_model_improved.pth",
-    model_output: str = "chess_model_selfplay.pth",
-    epochs: int = 10,
+    data_file: str = "selfplay_phase2.npz",
+    model_input: str = "chess_model_best.pth",
+    model_output: str = "chess_model_sp_v1.pth",
+    epochs: int = 5,
     batch_size: int = 256,
     learning_rate: float = 0.001,
     download: bool = False,

@@ -26,11 +26,11 @@ app = modal.App("selfplay-generator")
     volumes={"/data": volume},
 )
 def run_selfplay(
-    games: int = 100,
-    mcts_sims: int = 20,
-    max_length: int = 60,
-    output_name: str = "selfplay_output.npz",
-    model_path: str = "chess_model_improved.pth",
+    games: int = 200,
+    mcts_sims: int = 50,
+    max_length: int = 200,
+    output_name: str = "selfplay_phase2.npz",
+    model_path: str = "chess_model_best.pth",
     use_volume_model: bool = False,
 ):
     import os, sys
@@ -41,7 +41,7 @@ def run_selfplay(
     from selfplay_generator import generate_selfplay_dataset
 
     print("="*70)
-    print(f"🚀 Running self-play on Modal GPU")
+    print(f"🚀 PHASE 2: SELF-PLAY GENERATION ON MODAL GPU")
     print(f"Games: {games}, MCTS sims: {mcts_sims}")
     print(f"Model: {model_path}")
     print(f"Output: {output_name}")
@@ -104,11 +104,11 @@ def download_dataset(filename: str):
 
 @app.local_entrypoint()
 def main(
-    games: int = 100,
-    mcts_sims: int = 20,
-    max_length: int = 60,
-    output_name: str = "selfplay_output.npz",
-    model_path: str = "chess_model_improved.pth",
+    games: int = 200,
+    mcts_sims: int = 50,
+    max_length: int = 200,
+    output_name: str = "selfplay_phase2.npz",
+    model_path: str = "chess_model_best.pth",
     use_volume_model: bool = False,
     download: bool = False,
     list_files: bool = False,
