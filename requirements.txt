@@ -1,12 +1,12 @@
-# Core dependencies
+# ChessHacks Deployment Requirements
+# Minimal dependencies - no PyTorch to keep deployment size small
+
 fastapi>=0.100.0
 uvicorn>=0.20.0
 pydantic>=2.0.0
 python-chess>=1.999
-numpy>=1.24.0,<2.0.0
 
-# PyTorch - Use any available 2.x version
-torch>=2.0.0
-
-# Optional: For training on Modal (serverless GPU)
+# For local development with ML model, create a separate requirements-dev.txt:
+# numpy>=1.24.0,<2.0.0
+# torch>=2.0.0
 # modal>=0.60.0

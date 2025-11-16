@@ -1,0 +1,17 @@
+# Development requirements (includes ML dependencies)
+# Use this for local development with the neural network model
+
+-r requirements.txt
+
+# ML dependencies
+numpy>=1.24.0,<2.0.0
+torch>=2.0.0
+
+# Training tools
+modal>=0.60.0
+requests>=2.31.0
+zstandard>=0.22.0
+
+# Development tools
+pytest>=7.0.0
+ipython>=8.0.0

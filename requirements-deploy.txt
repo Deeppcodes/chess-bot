@@ -1,0 +1,9 @@
+# Minimal requirements for ChessHacks deployment
+# This version runs without the neural network model
+
+fastapi>=0.100.0
+uvicorn>=0.20.0
+pydantic>=2.0.0
+python-chess>=1.999
+
+# No PyTorch - use simpler move selection
