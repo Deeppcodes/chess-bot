@@ -1,25 +1,12 @@
-# PyTorch CPU-only (for deployment compatibility)
---extra-index-url https://download.pytorch.org/whl/cpu
-
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.5.2
-chess==1.11.2
-click==8.1.8
-exceptiongroup==1.3.0
-fastapi==0.121.2
-h11==0.16.0
-idna==3.11
+# Core dependencies
+fastapi>=0.100.0
+uvicorn>=0.20.0
+pydantic>=2.0.0
+python-chess>=1.999
 numpy>=1.24.0,<2.0.0
-pydantic==2.12.4
-pydantic_core==2.41.5
-python-chess==1.999
-sniffio==1.3.1
-starlette==0.49.3
-torch>=2.0.0,<2.3.0
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-uvicorn==0.38.0
+
+# PyTorch - Use any available 2.x version
+torch>=2.0.0
 
 # Optional: For training on Modal (serverless GPU)
 # modal>=0.60.0
