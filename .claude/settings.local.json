@@ -13,7 +13,10 @@
       "Bash(./stockfish quit)",
       "Bash(curl -L https://github.com/official-stockfish/Stockfish/releases/download/sf_16.1/stockfish-macos-m1-apple-silicon.zip -o stockfish.zip)",
       "Bash(make:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push origin modal)"
     ],
     "deny": [],
     "ask": []
