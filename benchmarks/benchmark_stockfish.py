@@ -331,7 +331,7 @@ class StockfishBenchmark:
                 stockfish_elo=elo,
                 num_games=games_per_level,
                 time_limit=1.0,
-                mcts_sims=50
+                mcts_sims=200
             )
             
             if stats:
@@ -373,8 +373,8 @@ def main():
                        help='Stockfish ELO level (default: 1200)')
     parser.add_argument('--games', type=int, default=10,
                        help='Number of games to play (default: 10)')
-    parser.add_argument('--mcts-sims', type=int, default=50,
-                       help='MCTS simulations per move (default: 50)')
+    parser.add_argument('--mcts-sims', type=int, default=200,
+                       help='MCTS simulations per move (default: 200)')
     parser.add_argument('--progressive', action='store_true',
                        help='Run progressive benchmark (multiple ELO levels)')
     parser.add_argument('--stockfish-path', type=str, default=None,
@@ -384,7 +384,19 @@ def main():
     
     # Initialize benchmark
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    default_model_path = os.path.join(project_root, 'models', 'chess_model.pth')
+    # Try multiple possible model paths
+    possible_paths = [
+        os.path.join(project_root, 'chess_model_best.pth'),
+        os.path.join(project_root, 'models', 'chess_model.pth'),
+        os.path.join(project_root, 'models', 'chess_model_best.pth'),
+    ]
+    default_model_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            default_model_path = path
+            break
+    if default_model_path is None:
+        default_model_path = possible_paths[0]  # Fallback
     
     benchmark = StockfishBenchmark(
         stockfish_path=args.stockfish_path,

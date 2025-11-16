@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Read(//Users/emaadqazi/Desktop/**)",
+      "Bash(brew install:*)",
+      "Bash(/opt/homebrew/bin/brew install:*)",
+      "Read(//usr/local/bin/**)",
+      "Bash(curl -L https://github.com/official-stockfish/Stockfish/releases/download/sf_16.1/stockfish-macos-m1-apple-silicon.tar -o stockfish.tar)",
+      "Bash(tar:*)",
+      "Bash(chmod:*)",
+      "Bash(ln:*)",
+      "Bash(./stockfish quit)",
+      "Bash(curl -L https://github.com/official-stockfish/Stockfish/releases/download/sf_16.1/stockfish-macos-m1-apple-silicon.zip -o stockfish.zip)",
+      "Bash(make:*)",
+      "Bash(find:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
