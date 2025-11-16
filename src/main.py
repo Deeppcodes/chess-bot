@@ -25,11 +25,10 @@ def _load_model():
     
     try:
         from .utils.model import ChessModel
-        from .utils.move_mapper import MoveMapper
-        from .utils.mcts import MCTS
+        from .utils.fixed_move_mapper import FixedMoveMapper  # FIXED MAPPER!
         
         # Load checkpoint
-        checkpoint = torch.load(model_path, map_location='cpu')
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
         
         # Create new CNN/ResNet model (replaces old MLP architecture)
         # Default: 6 residual blocks, 64 channels
@@ -56,18 +55,12 @@ def _load_model():
         
         _model.eval()
         
-        # Get move mapper
-        _move_mapper = checkpoint.get('move_mapper')
-        if _move_mapper is None:
-            _move_mapper = MoveMapper()
-        
-        # Create MCTS
-        # Adjust number of simulations based on available time
-        # Default to 50 simulations, but can be adjusted
-        _mcts = MCTS(_model, _move_mapper, num_simulations=50, exploration_constant=1.5)
+        # Use FIXED move mapper (consistent encoding between training and inference!)
+        _move_mapper = FixedMoveMapper()
         
         print(f"[OK] Loaded model from {model_path}")
         print(f"  Model architecture: CNN/ResNet")
+        print(f"  Move mapper: FixedMoveMapper (consistent encoding)")
         print(f"  Model parameters: {sum(p.numel() for p in _model.parameters()):,}")
     except Exception as e:
         print(f"Error loading model: {e}")
@@ -85,27 +78,44 @@ def test_func(ctx: GameContext):
     # This gets called every time the model needs to make a move
     # Return a python-chess Move object that is a legal move for the current position
 
-    print("Thinking with MCTS + Neural Network...")
+    print("Thinking with Neural Network (raw policy)...")
     
     legal_moves = list(ctx.board.generate_legal_moves())
     if not legal_moves:
         ctx.logProbabilities({})
         raise ValueError("No legal moves available (i probably lost didn't i)")
 
-    # Use MCTS + Neural Network if available, otherwise fall back to random
-    if _mcts is not None:
-        # Adjust simulations based on available time
-        # More time = more simulations = better moves
-        time_left_ms = ctx.timeLeft
-        if time_left_ms > 30000:  # More than 30 seconds
-            _mcts.num_simulations = 100
-        elif time_left_ms > 10000:  # More than 10 seconds
-            _mcts.num_simulations = 50
-        else:  # Less time
-            _mcts.num_simulations = 25
+    # Use raw model policy (MCTS was causing the bot to ignore model's good decisions!)
+    if _model is not None and _move_mapper is not None:
+        from .utils.board_encoder import board_to_tensor_torch
         
-        # Run MCTS search
-        best_move, move_probs = _mcts.search(ctx.board)
+        # Get model's policy prediction
+        board_tensor = board_to_tensor_torch(ctx.board)
+        
+        with torch.no_grad():
+            policy_logits, value = _model(board_tensor)
+        
+        # Convert to probabilities
+        policy_probs = torch.softmax(policy_logits, dim=1)[0]
+        
+        # Map to legal moves
+        move_probs_list = []
+        for move in legal_moves:
+            idx = _move_mapper.get_move_index(move)
+            prob = policy_probs[idx].item()
+            move_probs_list.append((move, prob))
+        
+        # Normalize probabilities over legal moves only
+        total_prob = sum(prob for _, prob in move_probs_list)
+        if total_prob > 0:
+            move_probs = {move: prob / total_prob for move, prob in move_probs_list}
+        else:
+            # Uniform if no probability mass on legal moves
+            uniform_prob = 1.0 / len(legal_moves)
+            move_probs = {move: uniform_prob for move in legal_moves}
+        
+        # Select best move
+        best_move = max(move_probs.items(), key=lambda x: x[1])[0]
         
         # Log probabilities
         ctx.logProbabilities(move_probs)

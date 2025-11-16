@@ -235,7 +235,7 @@ def train_selfplay(
         # Save best model
         if val_total_loss < best_val_loss:
             best_val_loss = val_total_loss
-            output_path = f"/data/data/{model_output}"
+            output_path = f"/data/{model_output}"
             torch.save(model.state_dict(), output_path)
             print(f"  ✓ Saved best model (val_loss: {val_total_loss:.4f})")
 
